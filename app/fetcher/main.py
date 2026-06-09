@@ -2,14 +2,19 @@ from __future__ import annotations
 
 import signal
 import threading
+import time
 import types
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 
 from app.common.config import get_settings
 from app.common.logging import configure_logging, get_logger
+from app.common.mq import MQClient
+from app.fetcher.client import InterpolClient
+from app.fetcher.publisher import FetchPublisher
 
 _HEALTH_PORT = 8080
+_MQ_RETRY_DELAY = 5
 
 
 class _HealthHandler(BaseHTTPRequestHandler):
@@ -27,8 +32,30 @@ class _HealthHandler(BaseHTTPRequestHandler):
 
 def _start_health_server() -> None:
     server = HTTPServer(("0.0.0.0", _HEALTH_PORT), _HealthHandler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+
+
+def _connect_with_retry(mq: MQClient, stop: threading.Event) -> bool:
+    log = get_logger(__name__)
+    while not stop.is_set():
+        try:
+            mq.connect()
+            log.info("fetcher.mq_connected")
+            return True
+        except Exception as exc:
+            log.warning("fetcher.mq_connect_failed", error=str(exc), retry_in=_MQ_RETRY_DELAY)
+            stop.wait(_MQ_RETRY_DELAY)
+    return False
+
+
+def _run_loop(publisher: FetchPublisher, interval: int, stop: threading.Event) -> None:
+    log = get_logger(__name__)
+    while not stop.is_set():
+        try:
+            publisher.run_cycle()
+        except Exception as exc:
+            log.error("fetcher.cycle_error", error=str(exc))
+        stop.wait(interval)
 
 
 def main() -> None:
@@ -41,11 +68,29 @@ def main() -> None:
     stop = threading.Event()
 
     def _handle(signum: int, frame: types.FrameType | None) -> None:
+        log.info("fetcher.shutdown", signum=signum)
         stop.set()
 
     signal.signal(signal.SIGTERM, _handle)
     signal.signal(signal.SIGINT, _handle)
+
+    mq = MQClient(settings)
+    http_client = InterpolClient(settings)
+
+    if not _connect_with_retry(mq, stop):
+        return
+
+    publisher = FetchPublisher(http_client, mq, settings)
+
+    threading.Thread(
+        target=_run_loop,
+        args=(publisher, settings.FETCH_INTERVAL_SECONDS, stop),
+        daemon=True,
+    ).start()
+
     stop.wait()
+    http_client.close()
+    mq.close()
     log.info("fetcher.stopped")
 
 
