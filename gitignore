@@ -1,0 +1,36 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Environment / secrets — NEVER commit real values ---
+.env
+.env.*
+!.env.example
+
+# --- Docker / local data volumes ---
+*.log
+data/
+minio-data/
+postgres-data/
+
+# --- Claude Code ---
+# Keep shared config & subagents versioned, ignore only local/personal state:
+.claude/settings.local.json
+
+# --- IDE / OS ---
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
