@@ -34,7 +34,7 @@ worker = [
 fetcher = [
     "interpol-pipeline[common]",
     "pika>=1.3",
-    "httpx>=0.27",
+    "curl-cffi>=0.7",
 ]
 dev = [
     "interpol-pipeline[api,worker,fetcher]",

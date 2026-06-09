@@ -12,6 +12,7 @@ from app.common.logging import configure_logging, get_logger
 from app.common.mq import MQClient
 from app.fetcher.client import InterpolClient
 from app.fetcher.publisher import FetchPublisher
+from app.fetcher.sweep import SweepStrategy
 
 _HEALTH_PORT = 8080
 _MQ_RETRY_DELAY = 5
@@ -76,11 +77,12 @@ def main() -> None:
 
     mq = MQClient(settings)
     http_client = InterpolClient(settings)
+    sweep = SweepStrategy(http_client, settings)
 
     if not _connect_with_retry(mq, stop):
         return
 
-    publisher = FetchPublisher(http_client, mq, settings)
+    publisher = FetchPublisher(sweep, mq, settings)
 
     threading.Thread(
         target=_run_loop,

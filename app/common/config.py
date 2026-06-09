@@ -13,7 +13,7 @@ from pydantic_settings import (
 )
 
 # Fields whose env vars are CSV strings rather than JSON arrays.
-_CSV_FIELDS: frozenset[str] = frozenset({"FETCH_NATIONALITIES"})
+_CSV_FIELDS: frozenset[str] = frozenset({"FETCH_NATIONALITIES", "FETCH_ARREST_WARRANT_COUNTRIES"})
 
 
 class _AppEnvSource(EnvSettingsSource):
@@ -40,9 +40,14 @@ class Settings(BaseSettings):
 
     # Fetcher
     INTERPOL_BASE_URL: str = "https://ws-public.interpol.int"
+    INTERPOL_REFERER: str = "https://www.interpol.int/"
+    INTERPOL_ORIGIN: str = "https://www.interpol.int"
+    INTERPOL_IMPERSONATE: str = "chrome120"
     FETCH_INTERVAL_SECONDS: int = 900
     FETCH_NATIONALITIES: list[str] = ["TR", "US", "DE", "FR", "GB"]
+    FETCH_ARREST_WARRANT_COUNTRIES: list[str] = ["TR", "US", "DE", "FR", "GB", "RU", "CN", "MX", "BR", "IT"]
     FETCH_RESULT_PER_PAGE: int = 200
+    INTERPOL_CAP: int = 160
     HTTP_MAX_RETRIES: int = 5
     HTTP_BACKOFF_BASE_SECONDS: float = 2.0
 
@@ -73,9 +78,9 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: Literal["json", "pretty"] = "json"
 
-    @field_validator("FETCH_NATIONALITIES", mode="before")
+    @field_validator("FETCH_NATIONALITIES", "FETCH_ARREST_WARRANT_COUNTRIES", mode="before")
     @classmethod
-    def _parse_nationalities(cls, v: object) -> object:
+    def _parse_csv_list(cls, v: object) -> object:
         if isinstance(v, str):
             return [n.strip() for n in v.split(",") if n.strip()]
         return v

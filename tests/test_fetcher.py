@@ -6,15 +6,12 @@ from unittest.mock import MagicMock, patch
 from app.common.config import Settings
 from app.fetcher.client import InterpolClient
 from app.fetcher.publisher import FetchPublisher, _build_payload
+from app.fetcher.sweep import SweepStrategy
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Shared helpers
 # ---------------------------------------------------------------------------
-
-def _page(notices: list[dict[str, Any]], total: int) -> dict[str, Any]:
-    return {"total": total, "_embedded": {"notices": notices}}
-
 
 def _notice(entity_id: str, nationality: str = "TR") -> dict[str, Any]:
     return {
@@ -32,73 +29,41 @@ def _notice(entity_id: str, nationality: str = "TR") -> dict[str, Any]:
 def _settings(**overrides: Any) -> Settings:
     defaults: dict[str, Any] = {
         "FETCH_NATIONALITIES": ["TR"],
-        "FETCH_RESULT_PER_PAGE": 2,
+        "FETCH_ARREST_WARRANT_COUNTRIES": ["TR"],
+        "FETCH_RESULT_PER_PAGE": 20,
         "HTTP_MAX_RETRIES": 1,
         "HTTP_BACKOFF_BASE_SECONDS": 0.0,
+        "INTERPOL_CAP": 160,
     }
     defaults.update(overrides)
     return Settings(**defaults)
 
 
 # ---------------------------------------------------------------------------
-# InterpolClient pagination
+# InterpolClient — HTTP layer
 # ---------------------------------------------------------------------------
 
-class TestInterpolClientPagination:
-    def test_single_page_returned_in_full(self) -> None:
-        pages = [_page([_notice("2021/1"), _notice("2021/2")], total=2)]
+class TestInterpolClient:
+    def test_fetch_page_sends_correct_params(self) -> None:
         client = InterpolClient(_settings())
-        it = iter(pages)
-        with patch.object(client, "_request", side_effect=lambda *a, **kw: next(it)):
-            result = list(client.sweep())
-        assert [n["entity_id"] for n in result] == ["2021/1", "2021/2"]
+        fake_response = {"total": 5, "_embedded": {"notices": []}, "_links": {}}
+        with patch.object(client, "_request", return_value=fake_response) as mock_req:
+            result = client.fetch_page({"nationality": "TR"}, page=3)
+        sent = mock_req.call_args[1]["params"]
+        assert sent["nationality"] == "TR"
+        assert sent["page"] == 3
+        assert sent["resultPerPage"] == 20
+        assert result is fake_response
 
-    def test_paginates_to_second_page_when_total_exceeds_page_size(self) -> None:
-        pages = [
-            _page([_notice("2021/1"), _notice("2021/2")], total=3),
-            _page([_notice("2021/3")], total=3),
-        ]
+    def test_fetch_total_returns_total_field(self) -> None:
         client = InterpolClient(_settings())
-        it = iter(pages)
-        with patch.object(client, "_request", side_effect=lambda *a, **kw: next(it)):
-            result = list(client.sweep())
-        assert len(result) == 3
-        assert result[-1]["entity_id"] == "2021/3"
+        with patch.object(client, "_request", return_value={"total": 42, "_embedded": {"notices": []}}):
+            assert client.fetch_total({"nationality": "US"}) == 42
 
-    def test_empty_first_page_yields_nothing(self) -> None:
+    def test_fetch_total_returns_zero_when_field_absent(self) -> None:
         client = InterpolClient(_settings())
-        with patch.object(client, "_request", return_value=_page([], total=0)):
-            result = list(client.sweep())
-        assert result == []
-
-    def test_dedup_removes_cross_nationality_duplicates(self) -> None:
-        settings = _settings(FETCH_NATIONALITIES=["TR", "US"])
-        shared_notice = _notice("2021/1")
-        client = InterpolClient(settings)
-        with patch.object(
-            client, "_request", return_value=_page([shared_notice], total=1)
-        ):
-            result = list(client.sweep())
-        assert len(result) == 1  # not 2
-
-    def test_no_dedup_for_distinct_ids(self) -> None:
-        settings = _settings(FETCH_NATIONALITIES=["TR", "US"])
-        pages = {
-            "TR": _page([_notice("2021/1", "TR")], total=1),
-            "US": _page([_notice("2021/2", "US")], total=1),
-        }
-        call_index = [0]
-        nationalities = ["TR", "US"]
-
-        def fake_request(*args: Any, **kwargs: Any) -> dict[str, Any]:
-            nat = kwargs.get("params", {}).get("nationality", nationalities[call_index[0]])
-            call_index[0] += 1
-            return pages[nat]
-
-        client = InterpolClient(settings)
-        with patch.object(client, "_request", side_effect=fake_request):
-            result = list(client.sweep())
-        assert len(result) == 2
+        with patch.object(client, "_request", return_value={"_embedded": {"notices": []}}):
+            assert client.fetch_total({}) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -117,8 +82,7 @@ class TestBuildPayload:
         assert "_links" not in payload
 
     def test_null_thumbnail_propagated(self) -> None:
-        payload = _build_payload(_notice("2021/1"), "c1")
-        assert payload["thumbnail_url"] is None
+        assert _build_payload(_notice("2021/1"), "c1")["thumbnail_url"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -126,13 +90,14 @@ class TestBuildPayload:
 # ---------------------------------------------------------------------------
 
 class TestFetchPublisher:
-    def test_publishes_upsert_then_manifest(self) -> None:
-        notice = _notice("2021/42", "FR")
+    def _publisher(self, notices: list[dict[str, Any]]) -> tuple[FetchPublisher, MagicMock]:
         mq = MagicMock()
-        client = MagicMock(spec=InterpolClient)
-        client.sweep.return_value = iter([notice])
-        publisher = FetchPublisher(client, mq, _settings())
+        sweep = MagicMock(spec=SweepStrategy)
+        sweep.sweep.return_value = iter(notices)
+        return FetchPublisher(sweep, mq, _settings()), mq
 
+    def test_publishes_upsert_per_notice_then_manifest(self) -> None:
+        publisher, mq = self._publisher([_notice("2021/42", "FR")])
         result = publisher.run_cycle()
 
         assert result.published == 1
@@ -150,25 +115,14 @@ class TestFetchPublisher:
         assert manifest_payload["total"] == 1
 
     def test_publish_error_increments_error_count(self) -> None:
-        mq = MagicMock()
+        publisher, mq = self._publisher([_notice("2021/1")])
         mq.publish.side_effect = [RuntimeError("connection lost"), None]
-        client = MagicMock(spec=InterpolClient)
-        client.sweep.return_value = iter([_notice("2021/1")])
-        publisher = FetchPublisher(client, mq, _settings())
-
         result = publisher.run_cycle()
-
         assert result.errors == 1
         assert result.published == 0
 
     def test_manifest_always_emitted_even_on_errors(self) -> None:
-        mq = MagicMock()
+        publisher, mq = self._publisher([_notice("2021/1")])
         mq.publish.side_effect = [RuntimeError("boom"), None]
-        client = MagicMock(spec=InterpolClient)
-        client.sweep.return_value = iter([_notice("2021/1")])
-        publisher = FetchPublisher(client, mq, _settings())
-
         publisher.run_cycle()
-
-        manifest_call = mq.publish.call_args_list[-1]
-        assert manifest_call[0][0] == "cycle.complete"
+        assert mq.publish.call_args_list[-1][0][0] == "cycle.complete"

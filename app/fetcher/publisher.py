@@ -8,7 +8,7 @@ from typing import Any
 from app.common.config import Settings
 from app.common.logging import get_logger
 from app.common.mq import MQClient
-from app.fetcher.client import InterpolClient
+from app.fetcher.sweep import SweepStrategy
 
 log = get_logger(__name__)
 
@@ -26,8 +26,8 @@ class CycleResult:
 
 
 class FetchPublisher:
-    def __init__(self, client: InterpolClient, mq: MQClient, settings: Settings) -> None:
-        self._client = client
+    def __init__(self, sweep: SweepStrategy, mq: MQClient, settings: Settings) -> None:
+        self._sweep = sweep
         self._mq = mq
         self._settings = settings
 
@@ -40,7 +40,7 @@ class FetchPublisher:
 
         log.info("fetcher.cycle_start", cycle_id=cycle_id)
 
-        for notice in self._client.sweep():
+        for notice in self._sweep.sweep():
             notice_id = notice.get("entity_id", "")
             try:
                 self._mq.publish(_UPSERT_KEY, _build_payload(notice, cycle_id))
