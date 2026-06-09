@@ -12,9 +12,13 @@ from app.common.config import Settings
 def configure_logging(settings: Settings) -> None:
     level = logging.getLevelNamesMapping().get(settings.LOG_LEVEL.upper(), logging.INFO)
 
+    # Route stdlib logging through a plain stream handler so structlog's final
+    # renderer is the only thing that formats the output (no extra decoration).
+    logging.basicConfig(format="%(message)s", stream=sys.stdout, level=level, force=True)
+
     processors: list[Any] = [
         structlog.stdlib.add_log_level,
-        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_logger_name,  # requires a stdlib-backed logger with .name
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.ExceptionRenderer(),
@@ -29,7 +33,7 @@ def configure_logging(settings: Settings) -> None:
         processors=processors,
         wrapper_class=structlog.make_filtering_bound_logger(level),
         context_class=dict,
-        logger_factory=structlog.PrintLoggerFactory(sys.stdout),
+        logger_factory=structlog.stdlib.LoggerFactory(),  # stdlib loggers have .name
         cache_logger_on_first_use=True,
     )
 
