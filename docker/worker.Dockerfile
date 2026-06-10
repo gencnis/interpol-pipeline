@@ -4,12 +4,17 @@ RUN python -m venv /venv
 ENV PATH="/venv/bin:$PATH"
 COPY pyproject.toml .
 COPY app/ ./app/
+COPY migrations/ ./migrations/
 RUN pip install --no-cache-dir ".[worker,common]"
 
 FROM python:3.12-slim AS runtime
 RUN useradd --system --uid 1001 appuser
 COPY --from=builder /venv /venv
+COPY --from=builder /build/migrations /migrations
 ENV PATH="/venv/bin:$PATH"
+# db.run_migrations() discovers migrations here; avoids path-relative lookup
+# from the installed package location inside the venv.
+ENV ALEMBIC_MIGRATIONS_PATH=/migrations
 WORKDIR /app
 USER appuser
 HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \

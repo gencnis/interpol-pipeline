@@ -1,23 +1,29 @@
 from __future__ import annotations
 
+import os
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
+
+from app.common.models import Base
 
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Populated in M3 when ORM models are added.
-target_metadata = None
+target_metadata = Base.metadata
 
 
 def _get_url() -> str:
-    from app.common.config import get_settings
-
-    return get_settings().POSTGRES_SYNC_DSN
+    # When called programmatically via db.run_migrations(), the URL is already
+    # injected into the alembic config via set_main_option.  Fall back to the
+    # environment variable so `alembic upgrade head` also works from a shell.
+    url = config.get_main_option("sqlalchemy.url")
+    if not url:
+        url = os.environ["POSTGRES_SYNC_DSN"]
+    return url
 
 
 def run_migrations_offline() -> None:

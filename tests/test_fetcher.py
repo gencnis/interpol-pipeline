@@ -8,7 +8,6 @@ from app.fetcher.client import InterpolClient
 from app.fetcher.publisher import FetchPublisher, _build_payload
 from app.fetcher.sweep import SweepStrategy
 
-
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
@@ -57,7 +56,8 @@ class TestInterpolClient:
 
     def test_fetch_total_returns_total_field(self) -> None:
         client = InterpolClient(_settings())
-        with patch.object(client, "_request", return_value={"total": 42, "_embedded": {"notices": []}}):
+        ret = {"total": 42, "_embedded": {"notices": []}}
+        with patch.object(client, "_request", return_value=ret):
             assert client.fetch_total({"nationality": "US"}) == 42
 
     def test_fetch_total_returns_zero_when_field_absent(self) -> None:

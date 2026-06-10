@@ -13,7 +13,6 @@ from app.fetcher.sweep import (
     _parse_last_page,
 )
 
-
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
@@ -108,13 +107,19 @@ class FakeInterpolBackend:
         if country := params.get("arrestWarrantCountryId"):
             result = [n for n in result if country in n.get("arrest_warrant_countries", [])]
         if forename := params.get("forename"):
-            result = [n for n in result if (n.get("forename") or "").upper().startswith(forename.upper())]
+            result = [
+                n for n in result if (n.get("forename") or "").upper().startswith(forename.upper())
+            ]
         if name_val := params.get("name"):
-            result = [n for n in result if (n.get("name") or "").upper().startswith(name_val.upper())]
+            result = [
+                n for n in result if (n.get("name") or "").upper().startswith(name_val.upper())
+            ]
         return result
 
 
-def _sweep(notices: list[dict[str, Any]], dimensions: list[Any], **setting_overrides: Any) -> list[dict[str, Any]]:
+def _sweep(
+    notices: list[dict[str, Any]], dimensions: list[Any], **setting_overrides: Any
+) -> list[dict[str, Any]]:
     """Helper: run SweepStrategy over FakeInterpolBackend and return all noticed yielded."""
     settings = _settings(**setting_overrides)
     client = InterpolClient(settings)
@@ -130,7 +135,8 @@ def _sweep(notices: list[dict[str, Any]], dimensions: list[Any], **setting_overr
 
 class TestParseLinkLastPage:
     def test_extracts_page_number_from_href(self) -> None:
-        data = {"_links": {"last": {"href": "/notices/v1/red?nationality=TR&page=4&resultPerPage=20"}}}
+        href = "/notices/v1/red?nationality=TR&page=4&resultPerPage=20"
+        data = {"_links": {"last": {"href": href}}}
         assert _parse_last_page(data) == 4
 
     def test_returns_one_when_links_absent(self) -> None:

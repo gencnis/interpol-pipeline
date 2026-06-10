@@ -4,9 +4,9 @@ import json
 from collections.abc import Callable
 from typing import Any
 
-import pika
-import pika.channel
-import pika.spec
+import pika  # type: ignore[import-untyped]
+import pika.channel  # type: ignore[import-untyped]
+import pika.spec  # type: ignore[import-untyped]
 
 from app.common.config import Settings
 from app.common.logging import get_logger

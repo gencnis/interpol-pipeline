@@ -6,7 +6,9 @@ from app.common.config import Settings
 from app.common.logging import configure_logging, get_logger
 
 
-def test_configure_json_info_does_not_raise(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_configure_json_info_does_not_raise(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.setenv("LOG_FORMAT", "json")
     configure_logging(Settings())
     log = get_logger("test.json")
@@ -15,7 +17,9 @@ def test_configure_json_info_does_not_raise(monkeypatch: pytest.MonkeyPatch, cap
     assert "hello-json" in captured.out
 
 
-def test_configure_pretty_info_does_not_raise(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_configure_pretty_info_does_not_raise(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     monkeypatch.setenv("LOG_FORMAT", "pretty")
     configure_logging(Settings())
     log = get_logger("test.pretty")

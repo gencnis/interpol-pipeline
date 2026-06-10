@@ -27,7 +27,8 @@ class _AppEnvSource(EnvSettingsSource):
         value: Any,
         value_is_complex: bool,
     ) -> Any:
-        if field_name in _CSV_FIELDS and isinstance(value, str) and not value.lstrip().startswith(("[", "{")):
+        is_csv = field_name in _CSV_FIELDS and isinstance(value, str)
+        if is_csv and not value.lstrip().startswith(("[", "{")):
             return value  # let field_validator handle CSV splitting
         return super().prepare_field_value(field_name, field, value, value_is_complex)
 
@@ -45,11 +46,17 @@ class Settings(BaseSettings):
     INTERPOL_IMPERSONATE: str = "chrome120"
     FETCH_INTERVAL_SECONDS: int = 900
     FETCH_NATIONALITIES: list[str] = ["TR", "US", "DE", "FR", "GB"]
-    FETCH_ARREST_WARRANT_COUNTRIES: list[str] = ["TR", "US", "DE", "FR", "GB", "RU", "CN", "MX", "BR", "IT"]
+    FETCH_ARREST_WARRANT_COUNTRIES: list[str] = [
+        "TR", "US", "DE", "FR", "GB", "RU", "CN", "MX", "BR", "IT"
+    ]
     FETCH_RESULT_PER_PAGE: int = 200
     INTERPOL_CAP: int = 160
     HTTP_MAX_RETRIES: int = 5
     HTTP_BACKOFF_BASE_SECONDS: float = 2.0
+    # Withdrawal reconciliation only runs when the cycle yielded at least this
+    # many notices.  Tune upward if the default filter space reliably returns
+    # more; lower for narrow test setups.
+    WITHDRAWAL_MIN_CYCLE_SIZE: int = 50
 
     # RabbitMQ
     RABBITMQ_URL: str = "amqp://guest:guest@rabbitmq:5672/"

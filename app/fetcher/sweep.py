@@ -161,7 +161,9 @@ class SweepStrategy:
         log.warning("sweep.overflow", total=total, cap=self._cap, filters=filters)
         yield from self._paginate(filters, first_page)
 
-    def _paginate(self, filters: dict[str, Any], first_page: dict[str, Any]) -> Iterator[dict[str, Any]]:
+    def _paginate(
+        self, filters: dict[str, Any], first_page: dict[str, Any]
+    ) -> Iterator[dict[str, Any]]:
         last_page = _parse_last_page(first_page)
 
         def _emit(data: dict[str, Any]) -> Iterator[dict[str, Any]]:

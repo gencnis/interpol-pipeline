@@ -127,6 +127,20 @@ services:
       retries: 3
       start_period: 15s
 
+  test:
+    build:
+      context: .
+      dockerfile: docker/test.Dockerfile
+    volumes:
+      # Mount the Docker socket so testcontainers can spin up its own
+      # Postgres / MinIO containers during integration tests.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Mount source so edits are visible without rebuilding.
+      - .:/src
+    working_dir: /src
+    profiles:
+      - test
+
 volumes:
   postgres_data:
   minio_data:

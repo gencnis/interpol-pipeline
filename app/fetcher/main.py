@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import signal
 import threading
-import time
 import types
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any

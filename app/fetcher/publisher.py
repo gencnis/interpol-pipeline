@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from app.common.config import Settings
@@ -33,7 +33,7 @@ class FetchPublisher:
 
     def run_cycle(self) -> CycleResult:
         cycle_id = str(uuid.uuid4())
-        started_at = datetime.now(timezone.utc).isoformat()
+        started_at = datetime.now(UTC).isoformat()
         notice_ids: list[str] = []
         published = 0
         errors = 0
@@ -50,13 +50,17 @@ class FetchPublisher:
                 errors += 1
                 log.error("fetcher.publish_error", notice_id=notice_id, error=str(exc))
 
-        finished_at = datetime.now(timezone.utc).isoformat()
+        finished_at = datetime.now(UTC).isoformat()
         self._mq.publish(
             _MANIFEST_KEY,
             {
                 "cycle_id": cycle_id,
                 "notice_ids": notice_ids,
                 "total": published,
+                "errors": errors,
+                # "ok" only when the sweep completed with zero publish errors;
+                # the worker's withdrawal guard rejects anything else.
+                "status": "ok" if errors == 0 else "partial",
                 "started_at": started_at,
                 "finished_at": finished_at,
             },
@@ -79,6 +83,11 @@ def _build_payload(notice: dict[str, Any], cycle_id: str) -> dict[str, Any]:
         "forename": notice.get("forename"),
         "name": notice.get("name"),
         "nationalities": notice.get("nationalities", []),
+        "arrest_warrant_countries": (
+            notice.get("arrest_warrant_countries")
+            or notice.get("arrestWarrantCountries")
+            or []
+        ),
         "sex_id": notice.get("sex_id"),
         "date_of_birth": notice.get("date_of_birth"),
         "thumbnail_url": notice.get("thumbnail_url"),
