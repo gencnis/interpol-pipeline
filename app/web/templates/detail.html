@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ notice.forename }} {{ notice.name }} — Interpol Pipeline{% endblock %}
+{% block content %}
+<p><a href="/">&#8592; Back to dashboard</a></p>
+<h2>{{ notice.forename or '' }} {{ notice.name or '' }}</h2>
+<span class="badge badge-{{ notice.status }}">{{ notice.status }}</span>
+
+<div style="display:flex;gap:2rem;flex-wrap:wrap;margin-top:1rem;">
+    <div style="flex:0 0 auto;">
+        {% if notice.thumbnail_url %}
+            <img src="{{ notice.thumbnail_url }}" class="photo" alt="Notice photo">
+        {% else %}
+            <div style="width:180px;height:180px;background:#eee;display:flex;align-items:center;justify-content:center;border-radius:.4rem;color:#888;">No photo</div>
+        {% endif %}
+    </div>
+    <div style="flex:1;min-width:280px;">
+        <table style="width:auto;">
+            <tr><th>Notice ID</th><td>{{ notice.notice_id }}</td></tr>
+            <tr><th>Sex</th><td>{{ notice.sex_id or '&#8212;' }}</td></tr>
+            <tr><th>Date of birth</th><td>{{ notice.date_of_birth or '&#8212;' }}</td></tr>
+            <tr><th>Nationalities</th><td>{{ notice.nationalities | join(', ') or '&#8212;' }}</td></tr>
+            <tr><th>Warrant countries</th><td>{{ notice.arrest_warrant_countries | join(', ') or '&#8212;' }}</td></tr>
+            <tr><th>Charge</th><td>{{ notice.charge_text or '&#8212;' }}</td></tr>
+            <tr><th>First seen</th><td>{{ notice.first_seen_at.strftime('%Y-%m-%d %H:%M') if notice.first_seen_at else '&#8212;' }}</td></tr>
+            <tr><th>Last changed</th><td>{{ notice.last_changed_at.strftime('%Y-%m-%d %H:%M') if notice.last_changed_at else '&#8212;' }}</td></tr>
+        </table>
+    </div>
+</div>
+
+<h3 style="margin-top:2rem;">Version Timeline</h3>
+<ul class="timeline">
+{% for h in notice.history %}
+    <li>
+        <span class="badge badge-{{ h.change_type }}">{{ h.change_type }}</span>
+        v{{ h.version }} &#8212; {{ h.recorded_at.strftime('%Y-%m-%d %H:%M:%S') if h.recorded_at else '&#8212;' }}
+        {% if h.diff %}
+            <pre class="diff">{{ h.diff | tojson(indent=2) }}</pre>
+        {% endif %}
+    </li>
+{% else %}
+    <li><em>No history.</em></li>
+{% endfor %}
+</ul>
+{% endblock %}

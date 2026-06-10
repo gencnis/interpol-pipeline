@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-try:
-    from curl_cffi.requests import Session as CffiSession  # type: ignore[import-untyped,unused-ignore]
-except ImportError:
-    CffiSession = None  # type: ignore[assignment,misc]
-
 from app.common.logging import get_logger
 from app.common.storage import StorageClient
+
+try:
+    from curl_cffi.requests import (
+        Session as CffiSession,  # type: ignore[import-untyped,unused-ignore]
+    )
+except ImportError:
+    CffiSession = None  # type: ignore[assignment,misc]
 
 log = get_logger(__name__)
 

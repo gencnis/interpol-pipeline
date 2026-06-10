@@ -1,0 +1,33 @@
+<table>
+    <thead>
+        <tr>
+            <th>Photo</th><th>Notice ID</th><th>Name</th>
+            <th>Nationalities</th><th>Status</th><th>Last Changed</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for n in notices %}
+        <tr>
+            <td>{% if n.thumbnail_url %}<img src="{{ n.thumbnail_url }}" width="50" style="border-radius:3px;">{% else %}&#8212;{% endif %}</td>
+            <td><a href="/notices/{{ n.notice_id }}">{{ n.notice_id }}</a></td>
+            <td>{{ n.forename or '' }} {{ n.name or '' }}</td>
+            <td>{{ n.nationalities | join(', ') }}</td>
+            <td><span class="badge badge-{{ n.status }}">{{ n.status }}</span></td>
+            <td>{{ n.last_changed_at.strftime('%Y-%m-%d %H:%M') if n.last_changed_at else '&#8212;' }}</td>
+        </tr>
+    {% else %}
+        <tr><td colspan="6" style="text-align:center;color:#888;">No notices found.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% if total > size %}
+<div class="pagination">
+    {% if page > 1 %}
+        <a href="?page={{ page-1 }}&size={{ size }}&name={{ request.query_params.get('name','') }}&nationality={{ request.query_params.get('nationality','') }}&status={{ request.query_params.get('status','') }}">&#8592; Prev</a>
+    {% endif %}
+    <span style="padding:.3rem .7rem;">Page {{ page }} of {{ ((total-1)//size)+1 }}</span>
+    {% if page * size < total %}
+        <a href="?page={{ page+1 }}&size={{ size }}&name={{ request.query_params.get('name','') }}&nationality={{ request.query_params.get('nationality','') }}&status={{ request.query_params.get('status','') }}">Next &#8594;</a>
+    {% endif %}
+</div>
+{% endif %}

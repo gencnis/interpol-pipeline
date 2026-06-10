@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Interpol Pipeline{% endblock %}
+{% block content %}
+<h2>Red Notices</h2>
+
+<!-- Search form — HTMX-powered -->
+<form class="form-row"
+      hx-get="/partials/notices"
+      hx-target="#notice-list"
+      hx-trigger="change, submit"
+      hx-push-url="false">
+    <input type="text" name="forename" placeholder="Forename" value="{{ request.query_params.get('forename','') }}">
+    <input type="text" name="name" placeholder="Surname" value="{{ request.query_params.get('name','') }}">
+    <input type="text" name="nationality" placeholder="Nationality code" value="{{ request.query_params.get('nationality','') }}">
+    <select name="status">
+        <option value="">All statuses</option>
+        <option value="active" {% if request.query_params.get('status')=='active' %}selected{% endif %}>Active</option>
+        <option value="withdrawn" {% if request.query_params.get('status')=='withdrawn' %}selected{% endif %}>Withdrawn</option>
+    </select>
+    <button type="submit">Search</button>
+</form>
+
+<div id="notice-list">
+    {% include "partials/notice_list.html" %}
+</div>
+
+<!-- Live alerts panel -->
+<div class="alert-panel" id="alerts-panel">
+    <strong style="display:block;margin-bottom:.4rem;">&#9889; Live Alerts</strong>
+    <div id="alerts-list">
+        <em style="font-size:.8rem;color:#888;">Connecting&#8230;</em>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    const panel = document.getElementById('alerts-list');
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(proto + '//' + location.host + '/ws/alerts');
+
+    ws.onopen = function() {
+        panel.innerHTML = '<em style="font-size:.8rem;color:#888;">Connected — waiting for events…</em>';
+    };
+
+    ws.onmessage = function(evt) {
+        let event;
+        try { event = JSON.parse(evt.data); } catch(e) { return; }
+
+        const div = document.createElement('div');
+        div.className = 'alert-item' + (event.change_type === 'withdrawn' ? ' withdrawn' : '');
+
+        let diffHtml = '';
+        if (event.diff && typeof event.diff === 'object') {
+            diffHtml = '<pre class="diff">' + JSON.stringify(event.diff, null, 2) + '</pre>';
+        }
+
+        div.innerHTML =
+            '<span class="badge badge-' + event.change_type + '">' + event.change_type.toUpperCase() + '</span>' +
+            '<strong> ' + event.notice_id + '</strong>' +
+            '<div style="color:#555;font-size:.8rem;">' + new Date().toLocaleTimeString() + '</div>' +
+            diffHtml;
+
+        // Remove placeholder text on first real event
+        const placeholder = panel.querySelector('em');
+        if (placeholder) placeholder.remove();
+
+        panel.insertBefore(div, panel.firstChild);
+        // Keep at most 30 alerts
+        while (panel.children.length > 30) panel.removeChild(panel.lastChild);
+    };
+
+    ws.onclose = function() {
+        const div = document.createElement('div');
+        div.style.cssText = 'font-size:.8rem;color:#dc3545;margin-top:.4rem;';
+        div.textContent = 'Disconnected. Reload to reconnect.';
+        panel.appendChild(div);
+    };
+})();
+</script>
+{% endblock %}

@@ -15,6 +15,7 @@ from app.common.config import get_settings
 from app.common.db import get_engine, make_session_factory, run_migrations, session_scope
 from app.common.logging import configure_logging, get_logger
 from app.common.mq import MQClient
+from app.common.redis_client import RedisPublisher
 from app.common.storage import StorageClient
 from app.worker.photo_service import PhotoService
 from app.worker.processor import NoticeProcessor
@@ -97,8 +98,10 @@ def main() -> None:
     storage = StorageClient(settings)
     storage.ensure_bucket()
 
+    redis_pub = RedisPublisher(settings.REDIS_URL, settings.REDIS_EVENT_CHANNEL)
+
     photo_service = PhotoService(storage, settings)
-    processor = NoticeProcessor(get_session, photo_service, settings)
+    processor = NoticeProcessor(get_session, photo_service, settings, redis_pub)
 
     stop = threading.Event()
 
@@ -126,6 +129,7 @@ def main() -> None:
     mq.stop_consuming()
     consumer_thread.join(timeout=5)
     mq.close()
+    redis_pub.close()
     engine.dispose()
     log.info("worker.stopped")
 
