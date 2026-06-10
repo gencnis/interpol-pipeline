@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Interpol Pipeline{% endblock %}
+
+{% block content %}
+<h1>Red Notice Dashboard</h1>
+
+<form hx-get="/partials/notices"
+      hx-target="#notice-list"
+      hx-trigger="change, input delay:400ms from:input"
+      hx-indicator="#search-spinner"
+      class="form-row">
+  <input name="name"
+         type="text"
+         placeholder="Name / forename…"
+         value="{{ filters.name or '' }}"
+         autocomplete="off">
+  <select name="nationality">
+    <option value="">All nationalities</option>
+    {% for code in nationalities %}
+    <option value="{{ code }}"{% if filters.nationality == code %} selected{% endif %}>{{ code }}</option>
+    {% endfor %}
+  </select>
+  <select name="status">
+    <option value="">All statuses</option>
+    <option value="active"{% if filters.status == 'active' %} selected{% endif %}>Active</option>
+    <option value="withdrawn"{% if filters.status == 'withdrawn' %} selected{% endif %}>Withdrawn</option>
+  </select>
+  <button type="submit">Search</button>
+  <span id="search-spinner" class="htmx-indicator" style="font-size:0.8rem; color:#6c757d">…</span>
+</form>
+
+<div class="grid-2">
+  <div>
+    <div id="notice-list">
+      {% include "partials/notice_list.html" %}
+    </div>
+  </div>
+
+  <div>
+    <h3>
+      Live Alerts
+      <span id="ws-status" class="ws-status">(connecting…)</span>
+    </h3>
+    <div id="alerts-panel" aria-live="polite"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const statusEl = document.getElementById('ws-status');
+  const panel    = document.getElementById('alerts-panel');
+  const proto    = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws       = new WebSocket(proto + '://' + location.host + '/ws/alerts');
+
+  ws.onopen  = () => { statusEl.textContent = '(connected)';    statusEl.style.color = '#28a745'; };
+  ws.onclose = () => { statusEl.textContent = '(disconnected)'; statusEl.style.color = '#dc3545'; };
+  ws.onerror = () => { statusEl.textContent = '(error)';        statusEl.style.color = '#dc3545'; };
+
+  ws.onmessage = (evt) => {
+    let d;
+    try { d = JSON.parse(evt.data); } catch (e) { return; }
+
+    const div = document.createElement('div');
+    div.className = 'alarm' + (d.event === 'withdrawn' ? ' withdrawn' : '');
+
+    const ts = new Date().toLocaleTimeString();
+    let html = '<span class="alarm-id">' + escHtml(d.event.toUpperCase()) + ' ' + escHtml(d.notice_id) + '</span>'
+             + '<span class="alarm-ts">' + ts + '</span>';
+
+    if (d.diff && typeof d.diff === 'object') {
+      Object.entries(d.diff).forEach(([k, v]) => {
+        const oldVal = v && v.old !== undefined ? JSON.stringify(v.old) : '—';
+        const newVal = v && v.new !== undefined ? JSON.stringify(v.new) : '—';
+        html += '<span class="diff-field">' + escHtml(k) + ': '
+              + '<span class="diff-old">' + escHtml(oldVal) + '</span>'
+              + ' → <span class="diff-new">' + escHtml(newVal) + '</span></span>';
+      });
+    }
+
+    div.innerHTML = html;
+    panel.prepend(div);
+  };
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+}());
+</script>
+{% endblock %}

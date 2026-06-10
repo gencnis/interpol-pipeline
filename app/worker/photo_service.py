@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 try:
-    from curl_cffi.requests import Session as CffiSession  # type: ignore[import-untyped,unused-ignore]
+    from curl_cffi.requests import (
+        Session as CffiSession,  # type: ignore[import-untyped,unused-ignore]
+    )
 except ImportError:
     CffiSession = None  # type: ignore[assignment,misc]
 

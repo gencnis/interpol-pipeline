@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}{{ (notice.forename or '') ~ ' ' ~ (notice.name or '') | trim }} — Interpol Pipeline{% endblock %}
+
+{% block content %}
+<p style="margin-bottom:0.5rem"><a href="/">← Dashboard</a></p>
+<h1>{{ (notice.forename or '') ~ ' ' ~ (notice.name or '') | trim or notice.notice_id }}</h1>
+
+<div style="display:grid; grid-template-columns: 1fr auto; gap:2rem; align-items:start; margin-bottom:1.5rem">
+  <table>
+    <tbody>
+      <tr><th>Notice ID</th><td>{{ notice.notice_id }}</td></tr>
+      <tr><th>Status</th><td><span class="badge badge-{{ notice.status }}">{{ notice.status }}</span></td></tr>
+      <tr><th>Sex</th><td>{{ notice.sex_id or '—' }}</td></tr>
+      <tr><th>Date of birth</th><td>{{ notice.date_of_birth or '—' }}</td></tr>
+      <tr>
+        <th>Nationalities</th>
+        <td>{% if notice.nationalities %}{{ notice.nationalities | join(', ') }}{% else %}—{% endif %}</td>
+      </tr>
+      <tr>
+        <th>Arrest warrant countries</th>
+        <td>
+          {% if notice.arrest_warrant_countries %}
+            {% for item in notice.arrest_warrant_countries %}
+              {% if item is mapping %}{{ item.get('countryId', item | string) }}{% else %}{{ item }}{% endif %}{% if not loop.last %}, {% endif %}
+            {% endfor %}
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+      <tr><th>Charge</th><td>{{ notice.charge_text or '—' }}</td></tr>
+      <tr><th>First seen</th><td>{{ notice.first_seen_at.strftime('%Y-%m-%d %H:%M UTC') if notice.first_seen_at else '—' }}</td></tr>
+      <tr><th>Last changed</th><td>{{ notice.last_changed_at.strftime('%Y-%m-%d %H:%M UTC') if notice.last_changed_at else '—' }}</td></tr>
+    </tbody>
+  </table>
+
+  <div>
+    {% if thumbnail_url %}
+    <img src="{{ thumbnail_url }}" alt="Notice photo" style="max-width:180px; max-height:260px; border-radius:4px; box-shadow:0 2px 6px rgba(0,0,0,.15)">
+    {% else %}
+    <div style="width:140px; height:180px; background:#e9ecef; border-radius:4px; display:flex; align-items:center; justify-content:center; color:#adb5bd; font-size:0.8rem; text-align:center">No photo</div>
+    {% endif %}
+  </div>
+</div>
+
+<h3>Version timeline</h3>
+{% if history %}
+<table>
+  <thead>
+    <tr>
+      <th>Ver.</th>
+      <th>Type</th>
+      <th>Recorded</th>
+      <th>Valid from</th>
+      <th>Valid to</th>
+      <th>Changes</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for h in history %}
+    <tr>
+      <td>{{ h.version }}</td>
+      <td><span class="badge {% if h.change_type == 'withdrawn' %}badge-withdrawn{% elif h.change_type == 'updated' %}badge-active{% else %}badge-active{% endif %}">{{ h.change_type }}</span></td>
+      <td>{{ h.recorded_at.strftime('%Y-%m-%d %H:%M') if h.recorded_at else '—' }}</td>
+      <td>{{ h.valid_from.strftime('%Y-%m-%d %H:%M') if h.valid_from else '—' }}</td>
+      <td>{{ h.valid_to.strftime('%Y-%m-%d %H:%M') if h.valid_to else '—' }}</td>
+      <td>
+        {% if h.diff %}
+          {% for field, changes in h.diff.items() %}
+          <span class="diff-field">{{ field }}:
+            <span class="diff-old">{{ changes.old | tojson }}</span>
+            → <span class="diff-new">{{ changes.new | tojson }}</span>
+          </span>
+          {% endfor %}
+        {% else %}—{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p style="color:#6c757d">No history recorded.</p>
+{% endif %}
+{% endblock %}

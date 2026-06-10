@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.common.logging import get_logger
+from app.common.redis_client import RedisPublisher
 from app.worker.normalizer import compute_diff, content_hash, normalize
 from app.worker.photo_service import PhotoService
 from app.worker.repository import NoticeRepository
@@ -40,10 +41,12 @@ class NoticeProcessor:
         get_session: _SessionFactory,
         photo_service: PhotoService,
         settings: Any,
+        redis_publisher: RedisPublisher | None = None,
     ) -> None:
         self._get_session = get_session
         self._photo = photo_service
         self._settings = settings
+        self._redis = redis_publisher
 
     # ------------------------------------------------------------------
     # Public handlers
@@ -57,6 +60,8 @@ class NoticeProcessor:
 
         normalized = normalize(payload)
         hash_ = content_hash(normalized)
+        diff: dict[str, Any] | None = None
+        result: str
 
         with self._get_session() as session:
             repo = NoticeRepository(session)
@@ -66,20 +71,28 @@ class NoticeProcessor:
                 obj_key = self._photo.process(notice_id, thumbnail_url)
                 repo.create(notice_id, normalized, hash_, obj_key, payload, now)
                 log.info("worker.notice_created", notice_id=notice_id)
-                return "created"
-
-            if existing.content_hash == hash_:
+                result = "created"
+            elif existing.content_hash == hash_:
                 repo.touch(existing, now)
                 log.debug("worker.notice_noop", notice_id=notice_id)
-                return "noop"
+                result = "noop"
+            else:
+                # Hash differs → compute field-level diff and persist the update.
+                old_normalized = normalize(existing.raw_json)
+                diff = compute_diff(old_normalized, normalized)
+                obj_key = self._photo.process(notice_id, thumbnail_url)
+                repo.update_state(existing, normalized, hash_, diff, obj_key, payload, now)
+                log.info("worker.notice_updated", notice_id=notice_id, diff_keys=sorted(diff))
+                result = "updated"
 
-            # Hash differs → compute field-level diff and persist the update.
-            old_normalized = normalize(existing.raw_json)
-            diff = compute_diff(old_normalized, normalized)
-            obj_key = self._photo.process(notice_id, thumbnail_url)
-            repo.update_state(existing, normalized, hash_, diff, obj_key, payload, now)
-            log.info("worker.notice_updated", notice_id=notice_id, diff_keys=sorted(diff))
-            return "updated"
+        # Publish after the DB transaction commits.
+        if self._redis and result in ("created", "updated"):
+            self._redis.publish(
+                {"event": result, "notice_id": notice_id, "diff": diff,
+                 "timestamp": now.isoformat()}
+            )
+
+        return result
 
     def handle_cycle_complete(self, manifest: dict[str, Any]) -> int:
         """Run withdrawal reconciliation.  Returns count withdrawn (0 if guard blocks)."""
@@ -119,14 +132,22 @@ class NoticeProcessor:
             cycle_start = datetime.now(tz=UTC)
 
         now = datetime.now(tz=UTC)
+        withdrawn_ids: list[str] = []
         with self._get_session() as session:
             repo = NoticeRepository(session)
             stale = repo.list_stale(cycle_start)
             # Double-check: exclude any notice that appears in the manifest
             # (guards against clock skew between fetcher and worker).
             to_withdraw = [n for n in stale if n.notice_id not in seen_ids]
+            withdrawn_ids = [n.notice_id for n in to_withdraw]
             count = repo.mark_withdrawn(to_withdraw, now)
 
         if count:
             log.info("worker.withdrawn", count=count, cycle_id=cycle_id)
+            if self._redis:
+                for n_id in withdrawn_ids:
+                    self._redis.publish(
+                        {"event": "withdrawn", "notice_id": n_id, "diff": None,
+                         "timestamp": now.isoformat()}
+                    )
         return count

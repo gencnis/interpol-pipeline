@@ -1,0 +1,28 @@
+{% if notices %}
+<table>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Name</th>
+      <th>Nationalities</th>
+      <th>Status</th>
+      <th>Last changed</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for n in notices %}
+    <tr>
+      <td><a href="/notices/{{ n.notice_id }}">{{ n.notice_id }}</a></td>
+      <td>{{ (n.forename or '') ~ ' ' ~ (n.name or '') | trim }}</td>
+      <td>
+        {% if n.nationalities %}{{ n.nationalities | join(', ') }}{% else %}—{% endif %}
+      </td>
+      <td><span class="badge badge-{{ n.status }}">{{ n.status }}</span></td>
+      <td>{{ n.last_changed_at.strftime('%Y-%m-%d %H:%M') if n.last_changed_at else '—' }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p style="color:#6c757d; padding: 1rem 0;">No notices found.</p>
+{% endif %}

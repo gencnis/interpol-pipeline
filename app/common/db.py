@@ -8,6 +8,12 @@ from typing import Any
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.common.logging import get_logger
@@ -42,6 +48,14 @@ def session_scope(factory: sessionmaker[Session]) -> Generator[Session, None, No
         raise
     finally:
         session.close()
+
+
+def get_async_engine(settings: Any) -> AsyncEngine:
+    return create_async_engine(settings.POSTGRES_DSN, pool_pre_ping=True)
+
+
+def make_async_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+    return async_sessionmaker(engine, expire_on_commit=False)
 
 
 def run_migrations(settings: Any) -> None:
