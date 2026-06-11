@@ -40,6 +40,8 @@ def content_hash(normalized: dict[str, Any]) -> str:
     True
     >>> content_hash({"a": 1}) == content_hash({"a": 2})
     False
+    >>> len(content_hash({"notice_id": "2021/1", "name": "DOE"}))
+    64
     """
     blob = json.dumps(normalized, sort_keys=True, ensure_ascii=False, default=str)
     return hashlib.sha256(blob.encode()).hexdigest()

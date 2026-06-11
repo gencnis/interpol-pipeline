@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}{{ notice.forename or '' }} {{ notice.name or '' }} &mdash; Interpol Pipeline{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="col-md-4">
+    {% if notice.thumbnail_url %}
+    <img src="{{ notice.thumbnail_url }}" class="img-fluid rounded shadow" style="max-height:350px" alt="Notice photo">
+    {% else %}
+    <div class="bg-secondary text-white rounded d-flex align-items-center justify-content-center" style="height:200px">
+      <span>No photo available</span>
+    </div>
+    {% endif %}
+  </div>
+  <div class="col-md-8">
+    <h2>{{ notice.forename or '' }} {{ notice.name or '' }}
+      {% if notice.status == 'active' %}
+        <span class="badge bg-success">Active</span>
+      {% else %}
+        <span class="badge bg-danger">Withdrawn</span>
+      {% endif %}
+    </h2>
+    <table class="table table-sm">
+      <tbody>
+        <tr><th>Notice ID</th><td><code>{{ notice.notice_id }}</code></td></tr>
+        <tr><th>Date of Birth</th><td>{{ notice.date_of_birth or '&mdash;' }}</td></tr>
+        <tr><th>Sex</th><td>{{ notice.sex_id or '&mdash;' }}</td></tr>
+        <tr><th>Nationalities</th><td>{{ notice.nationalities | join(', ') if notice.nationalities else '&mdash;' }}</td></tr>
+        <tr><th>Arrest Warrant Countries</th><td>{{ notice.arrest_warrant_countries | join(', ') if notice.arrest_warrant_countries else '&mdash;' }}</td></tr>
+        <tr><th>Charge</th><td>{{ notice.charge_text or '&mdash;' }}</td></tr>
+        <tr><th>First Seen</th><td>{{ notice.first_seen_at }}</td></tr>
+        <tr><th>Last Seen</th><td>{{ notice.last_seen_at }}</td></tr>
+        <tr><th>Last Changed</th><td>{{ notice.last_changed_at }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<h3 class="mt-4">Version History</h3>
+<div class="list-group">
+  {% for h in notice.history %}
+  <div class="list-group-item">
+    <div class="d-flex w-100 justify-content-between">
+      <h6 class="mb-1">
+        Version {{ h.version }}
+        {% if h.change_type == 'created' %}
+          <span class="badge bg-info text-dark">created</span>
+        {% elif h.change_type == 'updated' %}
+          <span class="badge bg-warning text-dark">updated</span>
+        {% else %}
+          <span class="badge bg-danger">withdrawn</span>
+        {% endif %}
+      </h6>
+      <small class="text-muted">{{ h.recorded_at }}</small>
+    </div>
+    {% if h.diff %}
+    <table class="table table-sm table-bordered mt-2 mb-0">
+      <thead class="table-light"><tr><th>Field</th><th>Old</th><th>New</th></tr></thead>
+      <tbody>
+        {% for field, change in h.diff.items() %}
+        <tr>
+          <td><code>{{ field }}</code></td>
+          <td class="text-danger">{{ change.old if change is mapping else change }}</td>
+          <td class="text-success">{{ change.new if change is mapping else '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="list-group-item text-muted">No history recorded.</div>
+  {% endfor %}
+</div>
+{% endblock %}

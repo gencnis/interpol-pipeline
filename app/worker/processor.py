@@ -10,11 +10,24 @@ from sqlalchemy.orm import Session
 from app.common.logging import get_logger
 from app.worker.normalizer import compute_diff, content_hash, normalize
 from app.worker.photo_service import PhotoService
+from app.worker.redis_publisher import RedisPublisher
 from app.worker.repository import NoticeRepository
 
 log = get_logger(__name__)
 
 _SessionFactory = Callable[[], AbstractContextManager[Session]]
+
+
+def _notice_name(normalized: dict[str, Any]) -> str | None:
+    parts = [
+        p
+        for p in (
+            str(normalized.get("forename") or "").strip(),
+            str(normalized.get("name") or "").strip(),
+        )
+        if p
+    ]
+    return " ".join(parts) or None
 
 
 class NoticeProcessor:
@@ -40,10 +53,12 @@ class NoticeProcessor:
         get_session: _SessionFactory,
         photo_service: PhotoService,
         settings: Any,
+        redis_publisher: RedisPublisher | None = None,
     ) -> None:
         self._get_session = get_session
         self._photo = photo_service
         self._settings = settings
+        self._redis_publisher = redis_publisher
 
     # ------------------------------------------------------------------
     # Public handlers
@@ -66,6 +81,11 @@ class NoticeProcessor:
                 obj_key = self._photo.process(notice_id, thumbnail_url)
                 repo.create(notice_id, normalized, hash_, obj_key, payload, now)
                 log.info("worker.notice_created", notice_id=notice_id)
+                if self._redis_publisher:
+                    _name = _notice_name(normalized)
+                    self._redis_publisher.publish(
+                        "created", notice_id, _name, None, now.isoformat()
+                    )
                 return "created"
 
             if existing.content_hash == hash_:
@@ -79,6 +99,9 @@ class NoticeProcessor:
             obj_key = self._photo.process(notice_id, thumbnail_url)
             repo.update_state(existing, normalized, hash_, diff, obj_key, payload, now)
             log.info("worker.notice_updated", notice_id=notice_id, diff_keys=sorted(diff))
+            if self._redis_publisher:
+                _name = _notice_name(normalized)
+                self._redis_publisher.publish("updated", notice_id, _name, diff, now.isoformat())
             return "updated"
 
     def handle_cycle_complete(self, manifest: dict[str, Any]) -> int:
@@ -129,4 +152,11 @@ class NoticeProcessor:
 
         if count:
             log.info("worker.withdrawn", count=count, cycle_id=cycle_id)
+            if self._redis_publisher:
+                for n in to_withdraw:
+                    withdrawn_normalized = normalize(n.raw_json)
+                    _name = _notice_name(withdrawn_normalized)
+                    self._redis_publisher.publish(
+                        "withdrawn", n.notice_id, _name, None, now.isoformat()
+                    )
         return count

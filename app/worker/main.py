@@ -18,6 +18,7 @@ from app.common.mq import MQClient
 from app.common.storage import StorageClient
 from app.worker.photo_service import PhotoService
 from app.worker.processor import NoticeProcessor
+from app.worker.redis_publisher import RedisPublisher
 
 _HEALTH_PORT = 8081
 _MQ_RETRY_DELAY = 5
@@ -98,7 +99,8 @@ def main() -> None:
     storage.ensure_bucket()
 
     photo_service = PhotoService(storage, settings)
-    processor = NoticeProcessor(get_session, photo_service, settings)
+    redis_publisher = RedisPublisher(settings.REDIS_URL, settings.REDIS_EVENT_CHANNEL)
+    processor = NoticeProcessor(get_session, photo_service, settings, redis_publisher)
 
     stop = threading.Event()
 

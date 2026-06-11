@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Interpol Pipeline{% endblock %}
+{% block content %}
+<div class="row">
+  <!-- Notice List Column -->
+  <div class="col-lg-8">
+    <h2>Red Notices</h2>
+    <form id="search-form"
+          hx-get="/notices"
+          hx-target="#notice-list"
+          hx-trigger="submit, input changed delay:500ms from:input[name='name'],input[name='nationality'],select[name='status']"
+          hx-include="#search-form"
+          class="row g-2 mb-3">
+      <div class="col-md-4">
+        <input type="text" name="name" class="form-control" placeholder="Search by name...">
+      </div>
+      <div class="col-md-3">
+        <input type="text" name="nationality" class="form-control" placeholder="Nationality (e.g. TR)">
+      </div>
+      <div class="col-md-3">
+        <select name="status" class="form-select">
+          <option value="">All statuses</option>
+          <option value="active">Active</option>
+          <option value="withdrawn">Withdrawn</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-primary w-100">Search</button>
+      </div>
+    </form>
+    <div id="notice-list">
+      {% include "_notice_list.html" %}
+    </div>
+  </div>
+  <!-- Live Alerts Panel -->
+  <div class="col-lg-4">
+    <h2>Live Alerts <span class="badge bg-danger" id="alert-count">0</span></h2>
+    <p class="text-muted small">Real-time updates via WebSocket</p>
+    <div id="alerts-panel" class="overflow-auto" style="max-height: 80vh;">
+      {% for a in alerts %}
+      <div class="alert alert-{{ 'warning' if a.change_type == 'updated' else 'danger' }} py-2 mb-1">
+        <span class="badge bg-{{ 'warning text-dark' if a.change_type == 'updated' else 'danger' }}">{{ a.change_type }}</span>
+        <strong>{{ a.notice_name or a.notice_id }}</strong>
+        {% if a.diff %}<small class="text-muted"> &middot; {{ a.diff.keys()|list|join(', ') }}</small>{% endif %}
+        <small class="text-muted float-end">{{ a.recorded_at }}</small>
+      </div>
+      {% else %}
+      <p class="text-muted" id="no-alerts-msg">No recent alerts.</p>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

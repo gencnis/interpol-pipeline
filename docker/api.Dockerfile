@@ -11,6 +11,10 @@ RUN useradd --system --uid 1001 appuser
 COPY --from=builder /venv /venv
 ENV PATH="/venv/bin:$PATH"
 WORKDIR /app
+COPY app/web/ /app/web/
+ENV APP_WEB_PATH=/app/web
+COPY migrations/ /migrations/
+ENV ALEMBIC_MIGRATIONS_PATH=/migrations
 USER appuser
 HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"

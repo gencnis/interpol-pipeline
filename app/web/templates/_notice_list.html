@@ -1,0 +1,45 @@
+{% if notices %}
+<table class="table table-hover table-sm">
+  <thead class="table-dark">
+    <tr>
+      <th>Name</th>
+      <th>Nationalities</th>
+      <th>Status</th>
+      <th>Last Changed</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for n in notices %}
+    <tr>
+      <td>{{ n.forename or '' }} {{ n.name or '' }}</td>
+      <td>{{ n.nationalities | join(', ') if n.nationalities else '&mdash;' }}</td>
+      <td>
+        {% if n.status == 'active' %}
+          <span class="badge bg-success">active</span>
+        {% else %}
+          <span class="badge bg-danger">withdrawn</span>
+        {% endif %}
+      </td>
+      <td><small>{{ n.last_changed_at }}</small></td>
+      <td><a href="/notices/{{ n.notice_id }}" class="btn btn-sm btn-outline-primary">View</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<div class="d-flex gap-2 align-items-center">
+  <small class="text-muted">{{ total }} total</small>
+  {% if page > 1 %}
+  <button class="btn btn-sm btn-outline-secondary"
+          hx-get="/notices?page={{ page - 1 }}&page_size={{ page_size }}"
+          hx-target="#notice-list">&larr; Prev</button>
+  {% endif %}
+  {% if notices|length == page_size %}
+  <button class="btn btn-sm btn-outline-secondary"
+          hx-get="/notices?page={{ page + 1 }}&page_size={{ page_size }}"
+          hx-target="#notice-list">Next &rarr;</button>
+  {% endif %}
+</div>
+{% else %}
+<div class="alert alert-info">No notices found.</div>
+{% endif %}
