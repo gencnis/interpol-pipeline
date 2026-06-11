@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,9 @@ from app.common.logging import get_logger
 from app.worker.normalizer import compute_diff, content_hash, normalize
 from app.worker.photo_service import PhotoService
 from app.worker.repository import NoticeRepository
+
+if TYPE_CHECKING:
+    from app.common.redis_client import RedisPublisher
 
 log = get_logger(__name__)
 
@@ -40,14 +43,37 @@ class NoticeProcessor:
         get_session: _SessionFactory,
         photo_service: PhotoService,
         settings: Any,
+        redis_publisher: RedisPublisher | None = None,
     ) -> None:
         self._get_session = get_session
         self._photo = photo_service
         self._settings = settings
+        self._redis = redis_publisher
 
     # ------------------------------------------------------------------
     # Public handlers
     # ------------------------------------------------------------------
+
+    def _publish(
+        self,
+        change_type: str,
+        notice_id: str,
+        forename: str | None,
+        name: str | None,
+        diff: dict[str, Any] | None,
+    ) -> None:
+        if self._redis is None:
+            return
+        self._redis.publish(
+            {
+                "notice_id": notice_id,
+                "change_type": change_type,
+                "forename": forename,
+                "name": name,
+                "diff": diff,
+                "recorded_at": datetime.now(UTC).isoformat(),
+            }
+        )
 
     def handle_upsert(self, payload: dict[str, Any]) -> str:
         """Process one notice message.  Returns 'created' | 'updated' | 'noop'."""
@@ -66,6 +92,10 @@ class NoticeProcessor:
                 obj_key = self._photo.process(notice_id, thumbnail_url)
                 repo.create(notice_id, normalized, hash_, obj_key, payload, now)
                 log.info("worker.notice_created", notice_id=notice_id)
+                self._publish(
+                    "created", notice_id,
+                    normalized.get("forename"), normalized.get("name"), None,
+                )
                 return "created"
 
             if existing.content_hash == hash_:
@@ -79,6 +109,10 @@ class NoticeProcessor:
             obj_key = self._photo.process(notice_id, thumbnail_url)
             repo.update_state(existing, normalized, hash_, diff, obj_key, payload, now)
             log.info("worker.notice_updated", notice_id=notice_id, diff_keys=sorted(diff))
+            self._publish(
+                "updated", notice_id,
+                normalized.get("forename"), normalized.get("name"), diff,
+            )
             return "updated"
 
     def handle_cycle_complete(self, manifest: dict[str, Any]) -> int:
@@ -125,6 +159,8 @@ class NoticeProcessor:
             # Double-check: exclude any notice that appears in the manifest
             # (guards against clock skew between fetcher and worker).
             to_withdraw = [n for n in stale if n.notice_id not in seen_ids]
+            for notice in to_withdraw:
+                self._publish("withdrawn", notice.notice_id, notice.forename, notice.name, None)
             count = repo.mark_withdrawn(to_withdraw, now)
 
         if count:

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}{{ notice.forename or '' }} {{ notice.name or notice.notice_id }} — Interpol Pipeline{% endblock %}
+
+{% block content %}
+<a href="/" class="back-link">‹ Back to dashboard</a>
+
+<div class="detail-header">
+  <h1>{{ notice.forename or '' }} {{ notice.name or '—' }}
+    <span class="badge badge-{{ notice.status }}">{{ notice.status }}</span>
+  </h1>
+  <p class="notice-id">Notice ID: <code>{{ notice.notice_id }}</code></p>
+</div>
+
+<div class="detail-grid">
+  <div class="detail-main">
+    {% if notice.photo_url %}
+    <img src="{{ notice.photo_url }}" alt="Notice photo" class="notice-photo">
+    {% else %}
+    <div class="no-photo">No photo available</div>
+    {% endif %}
+
+    <table class="fields-table">
+      <tbody>
+        <tr><th>Gender</th><td>{{ notice.sex_id or '—' }}</td></tr>
+        <tr><th>Date of birth</th><td>{{ notice.date_of_birth or '—' }}</td></tr>
+        <tr><th>Nationalities</th><td>{{ (notice.nationalities or []) | join(', ') or '—' }}</td></tr>
+        <tr><th>Arrest warrant countries</th><td>{{ (notice.arrest_warrant_countries or []) | join(', ') or '—' }}</td></tr>
+        <tr><th>Charge</th><td>{{ notice.charge_text or '—' }}</td></tr>
+        <tr><th>First seen</th><td>{{ notice.first_seen_at[:19].replace('T', ' ') if notice.first_seen_at else '—' }}</td></tr>
+        <tr><th>Last seen</th><td>{{ notice.last_seen_at[:19].replace('T', ' ') if notice.last_seen_at else '—' }}</td></tr>
+        <tr><th>Last changed</th><td>{{ notice.last_changed_at[:19].replace('T', ' ') if notice.last_changed_at else '—' }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="detail-timeline">
+    <h2>Version Timeline</h2>
+    {% if history %}
+    <ul class="timeline">
+      {% for entry in history %}
+      <li class="timeline-item timeline-{{ entry.change_type }}">
+        <div class="timeline-header">
+          <strong>v{{ entry.version }}</strong>
+          <span class="badge badge-{{ entry.change_type }}">{{ entry.change_type }}</span>
+          <span class="timeline-meta">{{ entry.recorded_at[:19].replace('T', ' ') if entry.recorded_at else '' }}</span>
+        </div>
+        {% if entry.diff %}
+        <div class="diff">
+          {% for field, change in entry.diff.items() %}
+          <div class="diff-field">
+            <span class="diff-key">{{ field }}:</span>
+            <span class="diff-old">"{{ change.old }}"</span>
+            →
+            <span class="diff-new">"{{ change.new }}"</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if entry.valid_to %}
+        <div class="timeline-meta">Superseded {{ entry.valid_to[:19].replace('T', ' ') }}</div>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p>No history available.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

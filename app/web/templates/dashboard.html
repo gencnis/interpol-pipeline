@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Interpol Pipeline{% endblock %}
+
+{% block content %}
+<div class="dashboard-grid">
+  <div class="notices-panel">
+    <h1>Red Notices</h1>
+
+    {# Search / filter form #}
+    <form class="search-form"
+          hx-get="/"
+          hx-target="#notices-content"
+          hx-push-url="true">
+      <input type="text" name="name" placeholder="Name" value="{{ filter_name or '' }}">
+      <input type="text" name="nationality" placeholder="Nationality code" value="{{ filter_nationality or '' }}">
+      <select name="status">
+        <option value="" {% if not filter_status %}selected{% endif %}>All statuses</option>
+        <option value="active" {% if filter_status == 'active' %}selected{% endif %}>Active</option>
+        <option value="withdrawn" {% if filter_status == 'withdrawn' %}selected{% endif %}>Withdrawn</option>
+      </select>
+      <button type="submit">Search</button>
+    </form>
+
+    <div id="notices-content">
+      {% if notices %}
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Nationalities</th>
+            <th>Status</th>
+            <th>Last Changed</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for n in notices %}
+          <tr>
+            <td>{{ n.forename or '' }} {{ n.name or '' }}</td>
+            <td>{{ (n.nationalities or []) | join(', ') }}</td>
+            <td>
+              <span class="badge badge-{{ n.status }}">{{ n.status }}</span>
+            </td>
+            <td>{{ n.last_changed_at[:19].replace('T', ' ') if n.last_changed_at else '—' }}</td>
+            <td><a href="/notices/{{ n.notice_id }}">View</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      {# Pagination #}
+      {% set pages = ((total + per_page - 1) // per_page) %}
+      <div class="pagination">
+        <span>{{ total }} total &nbsp;|&nbsp; page {{ page }} of {{ pages }}</span>
+        {% if page > 1 %}
+        <a href="/?page={{ page - 1 }}{% if filter_name %}&name={{ filter_name }}{% endif %}{% if filter_nationality %}&nationality={{ filter_nationality }}{% endif %}{% if filter_status %}&status={{ filter_status }}{% endif %}">‹ Prev</a>
+        {% endif %}
+        {% if page < pages %}
+        <a href="/?page={{ page + 1 }}{% if filter_name %}&name={{ filter_name }}{% endif %}{% if filter_nationality %}&nationality={{ filter_nationality }}{% endif %}{% if filter_status %}&status={{ filter_status }}{% endif %}">Next ›</a>
+        {% endif %}
+      </div>
+      {% else %}
+      <p class="empty-state">No notices found.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {# Live alerts panel #}
+  <div class="alerts-panel">
+    <h2>
+      Live Alerts
+      <span id="ws-indicator" class="ws-disconnected">● disconnected</span>
+    </h2>
+    <ul id="alerts-list"></ul>
+  </div>
+</div>
+{% endblock %}
